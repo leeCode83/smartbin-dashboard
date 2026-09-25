@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 type SmartBinPayload = {
   personDistance: number;
   fullDistance: number;
@@ -15,6 +17,12 @@ const GAS_RANGES = [
   { max: Infinity, label: "GAS BERBAHAYA" },
 ];
 
+/**
+ * Klasifikasikan raw ADC MQ-135 menjadi label kategori gas.
+ *
+ * @param gasValue Pembacaan raw ADC MQ-135 (0-4095).
+ * @returns Label kategori gas sesuai batas di GAS_RANGES.
+ */
 function classifyGas(gasValue: number): string {
   for (const range of GAS_RANGES) {
     if (gasValue < range.max) {
@@ -24,11 +32,16 @@ function classifyGas(gasValue: number): string {
   return "TIDAK DIKETAHUI";
 }
 
-// Sensor HC-SR04 mengirim -1 sebagai tanda error
-function formatSensor(value: number, unit: string): string {
-  return value < 0 ? "SENSOR ERROR" : `${value}${unit}`;
-}
-
+/**
+ * Terima data sensor dari ESP32 dan simpan sebagai satu baris di tabel
+ * `smartbin_readings`. Timestamp dibuat oleh database (`created_at`).
+ *
+ * Body JSON: `personDistance`, `fullDistance`, `fullness`, `gasValue`
+ * wajib angka; `servoTriggered` opsional (default false).
+ *
+ * @returns 200 `{ ok: true, gasLabel }` saat tersimpan,
+ *          400 untuk body tidak valid, 500 saat gagal insert.
+ */
 export async function POST(request: Request) {
   let body: unknown;
 
@@ -67,22 +80,22 @@ export async function POST(request: Request) {
 
   const data = payload as SmartBinPayload;
   const gasLabel = classifyGas(data.gasValue);
-  const timestamp = new Date().toLocaleString("id-ID", {
-    dateStyle: "short",
-    timeStyle: "medium",
+
+  const { error } = await supabase.from("smartbin_readings").insert({
+    person_distance: data.personDistance,
+    full_distance: data.fullDistance,
+    fullness: data.fullness,
+    gas_value: data.gasValue,
+    gas_label: gasLabel,
+    servo_triggered: data.servoTriggered ?? false,
   });
 
-  console.log(
-    [
-      "",
-      `[SMARTBIN] ${timestamp}`,
-      `  Person   : ${formatSensor(data.personDistance, " cm")}`,
-      `  Bin      : ${formatSensor(data.fullness, "%")} (jarak ${formatSensor(data.fullDistance, " cm")})`,
-      `  Gas      : ${data.gasValue} → ${gasLabel}`,
-      `  Servo    : ${data.servoTriggered ? "TRIGGERED" : "READY"}`,
-      "",
-    ].join("\n")
-  );
+  if (error) {
+    return Response.json(
+      { ok: false, error: `Gagal menyimpan ke database: ${error.message}` },
+      { status: 500 }
+    );
+  }
 
   return Response.json({ ok: true, gasLabel });
 }
