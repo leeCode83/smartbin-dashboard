@@ -1,4 +1,12 @@
+import type { NextRequest } from "next/server";
+
 import { supabase } from "@/lib/supabase";
+import { toReading, type SmartBinRow } from "@/lib/smartbin";
+
+// Batasan pagination GET /api/smartbin.
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 30;
+const MAX_LIMIT = 100;
 
 type SmartBinPayload = {
   personDistance: number;
@@ -98,4 +106,77 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ ok: true, gasLabel });
+}
+
+/**
+ * Ambil integer positif dari query param dengan nilai default.
+ *
+ * @param params Query param URL.
+ * @param name Nama param (mis. "page").
+ * @param fallback Nilai yang dipakai saat param tidak ada / kosong.
+ * @returns Angka hasil parsing, `fallback` saat param kosong,
+ *          atau `null` saat param ada tapi bukan integer >= 1.
+ */
+function positiveIntParam(
+  params: URLSearchParams,
+  name: string,
+  fallback: number
+): number | null {
+  const raw = params.get(name);
+  if (raw === null || raw === "") return fallback;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 1 ? value : null;
+}
+
+/**
+ * Daftar seluruh reading sensor, terbaru duluan, dengan pagination.
+ *
+ * Query param: `page` (default 1) dan `limit` (default 30, maksimal 100).
+ *
+ * @returns 200 `{ ok, data, page, limit, total, totalPages }`,
+ *          400 untuk param tidak valid, 500 saat gagal query.
+ */
+export async function GET(request: NextRequest) {
+  const params = request.nextUrl.searchParams;
+
+  const page = positiveIntParam(params, "page", DEFAULT_PAGE);
+  const limit = positiveIntParam(params, "limit", DEFAULT_LIMIT);
+
+  if (page === null || limit === null) {
+    return Response.json(
+      { ok: false, error: "Param page dan limit wajib integer >= 1" },
+      { status: 400 }
+    );
+  }
+
+  if (limit > MAX_LIMIT) {
+    return Response.json(
+      { ok: false, error: `limit maksimal ${MAX_LIMIT}` },
+      { status: 400 }
+    );
+  }
+
+  const { data, error, count } = await supabase
+    .from("smartbin_readings")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range((page - 1) * limit, page * limit - 1);
+
+  if (error) {
+    return Response.json(
+      { ok: false, error: `Gagal membaca database: ${error.message}` },
+      { status: 500 }
+    );
+  }
+
+  const total = count ?? 0;
+
+  return Response.json({
+    ok: true,
+    data: ((data ?? []) as SmartBinRow[]).map(toReading),
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit),
+  });
 }
