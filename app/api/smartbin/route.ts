@@ -11,7 +11,9 @@ const MAX_LIMIT = 100;
 type SmartBinPayload = {
   personDistance: number;
   fullDistance: number;
-  fullness: number;
+  fullnessOrganik: number;
+  fullnessAnorganik: number;
+  fullnessKertas: number;
   gasValue: number;
   servoTriggered?: boolean;
 };
@@ -44,8 +46,9 @@ function classifyGas(gasValue: number): string {
  * Terima data sensor dari ESP32 dan simpan sebagai satu baris di tabel
  * `smartbin_readings`. Timestamp dibuat oleh database (`created_at`).
  *
- * Body JSON: `personDistance`, `fullDistance`, `fullness`, `gasValue`
- * wajib angka; `servoTriggered` opsional (default false).
+ * Body JSON: `personDistance`, `fullDistance`, `fullnessOrganik`,
+ * `fullnessAnorganik`, `fullnessKertas`, `gasValue` wajib angka;
+ * `servoTriggered` opsional (default false).
  *
  * @returns 200 `{ ok: true, gasLabel }` saat tersimpan,
  *          400 untuk body tidak valid, 500 saat gagal insert.
@@ -67,7 +70,9 @@ export async function POST(request: Request) {
   const numericFields = [
     "personDistance",
     "fullDistance",
-    "fullness",
+    "fullnessOrganik",
+    "fullnessAnorganik",
+    "fullnessKertas",
     "gasValue",
   ] as const;
 
@@ -92,7 +97,9 @@ export async function POST(request: Request) {
   const { error } = await supabase.from("smartbin_readings").insert({
     person_distance: data.personDistance,
     full_distance: data.fullDistance,
-    fullness: data.fullness,
+    fullness_organik: data.fullnessOrganik,
+    fullness_anorganik: data.fullnessAnorganik,
+    fullness_kertas: data.fullnessKertas,
     gas_value: data.gasValue,
     gas_label: gasLabel,
     servo_triggered: data.servoTriggered ?? false,

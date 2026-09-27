@@ -4,7 +4,10 @@ export type SmartBinRow = {
   created_at: string;
   person_distance: number;
   full_distance: number;
-  fullness: number;
+  fullness_organik: number;
+  // null = baris lama sebelum migrasi 3 kompartemen.
+  fullness_anorganik: number | null;
+  fullness_kertas: number | null;
   gas_value: number;
   gas_label: string;
   servo_triggered: boolean;
@@ -16,7 +19,9 @@ export type SmartBinReading = {
   createdAt: string;
   personDistance: number;
   fullDistance: number;
-  fullness: number;
+  fullnessOrganik: number;
+  fullnessAnorganik: number | null;
+  fullnessKertas: number | null;
   gasValue: number;
   gasLabel: string;
   servoTriggered: boolean;
@@ -35,7 +40,9 @@ export function toReading(row: SmartBinRow): SmartBinReading {
     createdAt: row.created_at,
     personDistance: row.person_distance,
     fullDistance: row.full_distance,
-    fullness: row.fullness,
+    fullnessOrganik: row.fullness_organik,
+    fullnessAnorganik: row.fullness_anorganik,
+    fullnessKertas: row.fullness_kertas,
     gasValue: row.gas_value,
     gasLabel: row.gas_label,
     servoTriggered: row.servo_triggered,

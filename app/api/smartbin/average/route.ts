@@ -17,9 +17,9 @@ const MAX_RANGE_MS = UNIT_MS.m; // batas atas: 1 bulan (30 hari)
 type ParsedRange = { raw: string; ms: number };
 
 /** Kolom numerik yang dirata-ratakan, pas dengan select di handler. */
-type NumericRow = Pick<
+type NumericRow = Omit<
   SmartBinRow,
-  "person_distance" | "full_distance" | "fullness" | "gas_value"
+  "id" | "created_at" | "gas_label" | "servo_triggered"
 >;
 
 /**
@@ -40,13 +40,16 @@ function parseRange(raw: string): ParsedRange | null {
 }
 
 /**
- * Hitung rata-rata nilai sensor, mengabaikan -1 (tanda error dari HC-SR04).
+ * Hitung rata-rata nilai sensor, mengabaikan -1 (tanda error dari HC-SR04)
+ * dan null (baris lama sebelum migrasi 3 kompartemen).
  *
  * @param values Semua nilai satu kolom dalam rentang waktu.
  * @returns Rata-rata nilai valid, atau `null` saat tidak ada satu pun.
  */
-function average(values: number[]): number | null {
-  const valid = values.filter((value) => value !== -1);
+function average(values: (number | null)[]): number | null {
+  const valid = values.filter(
+    (value): value is number => value !== null && value !== -1
+  );
   if (valid.length === 0) return null;
   return valid.reduce((sum, value) => sum + value, 0) / valid.length;
 }
@@ -80,7 +83,9 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("smartbin_readings")
-    .select("person_distance, full_distance, fullness, gas_value")
+    .select(
+      "person_distance, full_distance, fullness_organik, fullness_anorganik, fullness_kertas, gas_value"
+    )
     .gte("created_at", from.toISOString());
 
   if (error) {
@@ -102,7 +107,9 @@ export async function GET(request: NextRequest) {
     averages: {
       personDistance: average(rows.map((row) => row.person_distance)),
       fullDistance: average(rows.map((row) => row.full_distance)),
-      fullness: average(rows.map((row) => row.fullness)),
+      fullnessOrganik: average(rows.map((row) => row.fullness_organik)),
+      fullnessAnorganik: average(rows.map((row) => row.fullness_anorganik)),
+      fullnessKertas: average(rows.map((row) => row.fullness_kertas)),
       gasValue: average(rows.map((row) => row.gas_value)),
     },
     samples: rows.length,
