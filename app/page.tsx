@@ -1,21 +1,73 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getSmartbinNow } from "@/lib/api";
+import type { SmartBinReading } from "@/lib/smartbin";
+
+// Tinggi dalam tong (cm) untuk konversi fullDistance -> persentase kepenuhan.
+// Sesuaikan dengan tinggi asli tong sampah.
+const TINGGI_TONG_CM = 30;
 
 export default function Dashboard() {
-  // 1. KONTRAK DATA FINAL (Hanya 1 Tong untuk Assignment 1)
-  const [sensorData] = useState({
-    kapasitas_tong: 62, 
-    gas_adc: 2500,
-    jarak_user_cm: 3.9
-  });
+  const [reading, setReading] = useState<SmartBinReading | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [thresholdBau, setThresholdBau] = useState(2000);
 
+  // Polling setiap 5 detik; endpoint /now tidak butuh parameter dan selalu
+  // mengembalikan bacaan terbaru, jadi cukup satu sumber data.
+  useEffect(() => {
+    let aktif = true;
+
+    async function muat() {
+      try {
+        const data = await getSmartbinNow();
+        if (!aktif) return;
+        setReading(data);
+        setError(null);
+      } catch (err) {
+        if (!aktif) return;
+        setError(err instanceof Error ? err.message : "Gagal memuat data sensor");
+      } finally {
+        if (aktif) setIsLoading(false);
+      }
+    }
+
+    muat();
+    const interval = setInterval(muat, 5000);
+    return () => {
+      aktif = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // -1 berarti sensor HC-SR04 error -> dianggap tidak ada nilai.
+  const kapasitas =
+    reading && reading.fullDistance >= 0
+      ? Math.min(
+          100,
+          Math.max(0, ((TINGGI_TONG_CM - reading.fullDistance) / TINGGI_TONG_CM) * 100)
+        )
+      : null;
+  const gasAdc = reading ? Math.round(reading.gasValue) : null;
+  const jarakUser = reading && reading.personDistance >= 0 ? reading.personDistance : null;
+
   // 2. LOGIKA KONDISIONAL
-  const isBau = sensorData.gas_adc >= thresholdBau;
-  const isServoBuka = sensorData.jarak_user_cm <= 5;
-  const isFull = sensorData.kapasitas_tong >= 100;
+  const isBau = gasAdc !== null && gasAdc >= thresholdBau;
+  const isServoBuka = jarakUser !== null && jarakUser <= 5;
+  const isFull = kapasitas !== null && kapasitas >= 100;
+
+  const kapasitasTone =
+    kapasitas === null ? "text-slate-400" : isFull ? "text-red-700" : "text-emerald-700";
+  const kapasitasBg =
+    kapasitas === null
+      ? "bg-slate-50 border-slate-100"
+      : isFull
+        ? "bg-red-50 border-red-100"
+        : "bg-emerald-50 border-emerald-100";
+  const kapasitasBar =
+    kapasitas === null ? "bg-slate-300" : isFull ? "bg-red-500" : "bg-emerald-500";
 
   const handleSimpanThreshold = () => {
     alert(`Threshold bau disetel ke: ${thresholdBau} ADC.\n(Nanti tombol ini menembak API POST ke Backend)`);
@@ -31,34 +83,45 @@ export default function Dashboard() {
         </div>
         <div className="px-4 py-2 bg-white rounded-xl border border-slate-200 shadow-sm inline-flex items-center gap-3">
           <span className="text-xs font-semibold text-slate-500">Sistem Gate:</span>
-          <span className={`text-sm font-bold ${isServoBuka ? 'text-green-600' : 'text-slate-800'}`}>
-            {isServoBuka ? "TERBUKA (0°)" : "TERTUTUP (90°)"}
+          <span className={`text-sm font-bold ${jarakUser === null ? 'text-slate-400' : isServoBuka ? 'text-green-600' : 'text-slate-800'}`}>
+            {jarakUser === null ? "—" : isServoBuka ? "TERBUKA (0°)" : "TERTUTUP (90°)"}
           </span>
         </div>
       </div>
 
+      {/* STATUS SUMBER DATA */}
+      {error ? (
+        <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm font-semibold text-red-700">
+          Gagal memuat data sensor: {error} — mencoba lagi otomatis…
+        </div>
+      ) : !reading ? (
+        <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm font-semibold text-amber-700">
+          {isLoading ? "Memuat data sensor…" : "Belum ada data dari ESP32 — menunggu bacaan pertama…"}
+        </div>
+      ) : null}
+
       {/* MAIN GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        
+
         {/* CARD 1: KAPASITAS TONG (1 Kompartemen Sentral) */}
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-2 flex flex-col justify-between">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-slate-800 flex items-center gap-2">🗑️ Kapasitas Tempat Sampah</h3>
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-100 px-2 py-1 rounded-md">HC-SR04</span>
           </div>
-          
-          <div className={`p-8 rounded-2xl border ${isFull ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'} flex-1 flex flex-col justify-center`}>
+
+          <div className={`p-8 rounded-2xl border ${kapasitasBg} flex-1 flex flex-col justify-center`}>
             <div className="flex justify-between items-center mb-6">
-              <span className={`font-semibold text-xl ${isFull ? 'text-red-700' : 'text-emerald-700'}`}>Kopdes Bin</span>
-              <span className={`text-xs font-bold px-3 py-1.5 bg-white rounded-md shadow-sm ${isFull ? 'text-red-700' : 'text-emerald-700'}`}>
-                {isFull ? "FULL" : "TERSEDIA"}
+              <span className={`font-semibold text-xl ${kapasitasTone}`}>Kopdes Bin</span>
+              <span className={`text-xs font-bold px-3 py-1.5 bg-white rounded-md shadow-sm ${kapasitasTone}`}>
+                {kapasitas === null ? "—" : isFull ? "FULL" : "TERSEDIA"}
               </span>
             </div>
             <div className="flex items-end gap-2 mb-4">
-              <span className={`text-6xl font-extrabold tracking-tighter ${isFull ? 'text-red-700' : 'text-emerald-700'}`}>{sensorData.kapasitas_tong}%</span>
+              <span className={`text-6xl font-extrabold tracking-tighter ${kapasitasTone}`}>{kapasitas === null ? "—" : `${Math.round(kapasitas)}%`}</span>
             </div>
             <div className="w-full bg-white/60 h-4 rounded-full overflow-hidden shadow-inner">
-              <div className={`h-full rounded-full transition-all duration-500 ease-out ${isFull ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${sensorData.kapasitas_tong}%` }}></div>
+              <div className={`h-full rounded-full transition-all duration-500 ease-out ${kapasitasBar}`} style={{ width: `${kapasitas ?? 0}%` }}></div>
             </div>
           </div>
         </div>
@@ -71,11 +134,11 @@ export default function Dashboard() {
           </div>
 
           <div className="flex-1 flex flex-col justify-center items-center text-center p-4">
-            <span className={`text-5xl font-extrabold tracking-tighter mb-2 ${isBau ? 'text-red-600' : 'text-slate-800'}`}>
-              {sensorData.gas_adc} <span className={`text-lg font-medium ${isBau ? 'text-red-400' : 'text-slate-400'}`}>ADC</span>
+            <span className={`text-5xl font-extrabold tracking-tighter mb-2 ${gasAdc === null ? 'text-slate-300' : isBau ? 'text-red-600' : 'text-slate-800'}`}>
+              {gasAdc === null ? "—" : gasAdc} <span className={`text-lg font-medium ${isBau ? 'text-red-400' : 'text-slate-400'}`}>ADC</span>
             </span>
-            <span className={`px-4 py-1.5 text-xs font-bold rounded-full border ${isBau ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
-              {isBau ? "BAU TERDETEKSI" : "TIDAK BAU"}
+            <span className={`px-4 py-1.5 text-xs font-bold rounded-full border ${gasAdc === null ? 'bg-slate-50 text-slate-400 border-slate-200' : isBau ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
+              {gasAdc === null ? "—" : isBau ? "BAU TERDETEKSI" : "TIDAK BAU"}
             </span>
           </div>
 
@@ -106,17 +169,17 @@ export default function Dashboard() {
               <tr className="border-b border-slate-100">
                 <td className="px-4 py-3 font-medium text-slate-800">HC-SR04 (Tong Sampah)</td>
                 <td className="px-4 py-3">Persentase Kepenuhan</td>
-                <td className="px-4 py-3 font-bold text-emerald-600">{sensorData.kapasitas_tong}%</td>
+                <td className={`px-4 py-3 font-bold ${kapasitasTone}`}>{kapasitas === null ? "—" : `${Math.round(kapasitas)}%`}</td>
               </tr>
               <tr className="border-b border-slate-100">
                 <td className="px-4 py-3 font-medium text-slate-800">HC-SR04 (Deteksi User)</td>
                 <td className="px-4 py-3">Jarak Objek</td>
-                <td className="px-4 py-3 font-bold text-slate-800">{sensorData.jarak_user_cm} cm</td>
+                <td className="px-4 py-3 font-bold text-slate-800">{jarakUser === null ? "—" : `${jarakUser.toFixed(1)} cm`}</td>
               </tr>
               <tr>
                 <td className="px-4 py-3 font-medium text-slate-800">MQ-135</td>
                 <td className="px-4 py-3">Tingkat Kepekatan Gas</td>
-                <td className={`px-4 py-3 font-bold ${isBau ? 'text-red-600' : 'text-emerald-600'}`}>{sensorData.gas_adc} ADC</td>
+                <td className={`px-4 py-3 font-bold ${gasAdc === null ? 'text-slate-400' : isBau ? 'text-red-600' : 'text-emerald-600'}`}>{gasAdc === null ? "—" : `${gasAdc} ADC`}</td>
               </tr>
             </tbody>
           </table>
