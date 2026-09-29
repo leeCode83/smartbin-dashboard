@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getSmartbinNow } from "@/lib/api";
+import { getSmartbinNow, getThreshold, saveThreshold } from "@/lib/api";
 import type { SmartBinReading } from "@/lib/smartbin";
 
 // Tinggi dalam tong (cm) untuk konversi fullDistance -> persentase kepenuhan.
@@ -14,6 +14,11 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
 
   const [thresholdBau, setThresholdBau] = useState(2000);
+  const [menyimpan, setMenyimpan] = useState(false);
+  const [feedbackSimpan, setFeedbackSimpan] = useState<{
+    tipe: "sukses" | "gagal";
+    pesan: string;
+  } | null>(null);
 
   // Polling setiap 5 detik; endpoint /now tidak butuh parameter dan selalu
   // mengembalikan bacaan terbaru, jadi cukup satu sumber data.
@@ -34,7 +39,18 @@ export default function Dashboard() {
       }
     }
 
+    // Threshold dibaca sekali saat mount; gagal load cukup pakai default 2000.
+    async function muatThreshold() {
+      try {
+        const data = await getThreshold();
+        if (aktif && data) setThresholdBau(data.gasThreshold);
+      } catch (err) {
+        console.error("Gagal memuat threshold:", err);
+      }
+    }
+
     muat();
+    muatThreshold();
     const interval = setInterval(muat, 5000);
     return () => {
       aktif = false;
@@ -69,8 +85,25 @@ export default function Dashboard() {
   const kapasitasBar =
     kapasitas === null ? "bg-slate-300" : isFull ? "bg-red-500" : "bg-emerald-500";
 
-  const handleSimpanThreshold = () => {
-    alert(`Threshold bau disetel ke: ${thresholdBau} ADC.\n(Nanti tombol ini menembak API POST ke Backend)`);
+  const handleSimpanThreshold = async () => {
+    if (!Number.isFinite(thresholdBau) || thresholdBau < 0 || thresholdBau > 4095) {
+      setFeedbackSimpan({ tipe: "gagal", pesan: "Harus angka 0–4095" });
+      return;
+    }
+    setMenyimpan(true);
+    setFeedbackSimpan(null);
+    try {
+      const data = await saveThreshold(thresholdBau);
+      setThresholdBau(data.gasThreshold);
+      setFeedbackSimpan({ tipe: "sukses", pesan: "Tersimpan" });
+    } catch (err) {
+      setFeedbackSimpan({
+        tipe: "gagal",
+        pesan: err instanceof Error ? err.message : "Gagal menyimpan",
+      });
+    } finally {
+      setMenyimpan(false);
+    }
   };
 
   return (
@@ -143,12 +176,19 @@ export default function Dashboard() {
           </div>
 
           {/* KONTROL THRESHOLD */}
-          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
-             <span className="text-[10px] font-bold text-slate-400 uppercase">Batas Pemicu</span>
-             <div className="flex items-center gap-2">
-                <input type="number" value={thresholdBau} onChange={(e) => setThresholdBau(Number(e.target.value))} className="w-20 px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500 text-center font-bold text-slate-700 bg-slate-50"/>
-                <button onClick={handleSimpanThreshold} className="px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-md hover:bg-slate-700 transition-colors shadow-sm">Simpan</button>
-             </div>
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="flex items-center justify-between gap-2">
+               <span className="text-[10px] font-bold text-slate-400 uppercase">Batas Pemicu</span>
+               <div className="flex items-center gap-2">
+                  <input type="number" value={thresholdBau} onChange={(e) => setThresholdBau(Number(e.target.value))} className="w-20 px-2 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500 text-center font-bold text-slate-700 bg-slate-50"/>
+                  <button onClick={handleSimpanThreshold} disabled={menyimpan} className="px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-md hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">Simpan</button>
+               </div>
+            </div>
+            {feedbackSimpan && (
+              <p className={`mt-2 text-[11px] font-semibold text-right ${feedbackSimpan.tipe === "sukses" ? "text-emerald-600" : "text-red-600"}`}>
+                {feedbackSimpan.pesan}
+              </p>
+            )}
           </div>
         </div>
       </div>
