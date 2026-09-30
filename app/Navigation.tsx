@@ -2,50 +2,70 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ChartLine, Info, Recycle } from "@phosphor-icons/react";
+
+const MENU = [
+  { href: "/", label: "Dashboard", icon: ChartLine },
+  { href: "/info", label: "Info Project", icon: Info },
+] as const;
 
 export default function Navigation() {
   const pathname = usePathname(); // Membaca posisi URL saat ini
 
-  // Fungsi penentu warna tombol (Aktif vs Inaktif)
-  const getDesktopClass = (path: string) => 
-    pathname === path 
-      ? "px-4 py-2.5 bg-green-50 text-green-800 rounded-xl font-semibold transition-colors"
-      : "px-4 py-2.5 text-slate-500 hover:bg-slate-50 rounded-xl font-medium transition-colors";
-
-  const getMobileClass = (path: string) =>
-    pathname === path
-      ? "flex flex-col items-center gap-1 text-green-700"
-      : "flex flex-col items-center gap-1 text-slate-400";
-
   return (
     <>
       {/* SIDEBAR (Desktop Only) */}
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 p-5 shrink-0 z-10 shadow-sm">
-        <div className="font-bold text-2xl text-green-700 mb-2 flex items-center gap-2">
-          🌱 KOPDES
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-white/[0.06] bg-white/[0.02] px-5 py-8 md:flex lg:w-64">
+        <div className="mb-10 flex items-center gap-3 px-2">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand/15 text-mint ring-1 ring-brand/25">
+            <Recycle size={20} weight="light" />
+          </span>
+          <div className="leading-tight">
+            <p className="text-sm font-semibold tracking-[0.22em] text-ink">KOPDES</p>
+            <p className="mt-0.5 text-[11px] text-hush">Smart Bin Monitoring</p>
+          </div>
         </div>
-        <p className="text-xs text-slate-400 mb-8 font-medium">Kotak Otomatis Pemilah Dengan ESP32 & Server</p>
-        
-        <nav className="flex flex-col gap-2">
-          <Link href="/" className={getDesktopClass("/")}>
-            📊 Dashboard
-          </Link>
-          <Link href="/info" className={getDesktopClass("/info")}>
-            ℹ️ Info Project
-          </Link>
+
+        <nav className="flex flex-col gap-1.5">
+          {MENU.map(({ href, label, icon: Icon }) => {
+            const aktif = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm transition-all duration-300 ease-fluid active:scale-[0.98] ${
+                  aktif
+                    ? "bg-brand/10 font-semibold text-mint ring-1 ring-brand/20"
+                    : "font-medium text-hush hover:bg-white/[0.04] hover:text-ink"
+                }`}
+              >
+                <Icon size={17} weight={aktif ? "fill" : "light"} className="shrink-0" />
+                {label}
+              </Link>
+            );
+          })}
         </nav>
       </aside>
 
-      {/* BOTTOM NAV (Mobile Only) - Akan dipanggil di dalam wrapper utama */}
-      <nav className="md:hidden bg-white border-t border-slate-200 flex justify-around p-3 shrink-0 pb-safe z-20">
-        <Link href="/" className={getMobileClass("/")}>
-          <span className="text-lg">📊</span>
-          <span className="text-[10px] font-bold">Dashboard</span>
-        </Link>
-        <Link href="/info" className={getMobileClass("/info")}>
-          <span className="text-lg">ℹ️</span>
-          <span className="text-[10px] font-medium">Info</span>
-        </Link>
+      {/* BOTTOM NAV (Mobile Only) — island kaca mengambang */}
+      <nav className="fixed inset-x-4 bottom-4 z-40 flex gap-1 rounded-2xl border border-white/10 bg-panel/85 p-1.5 shadow-[0_20px_50px_-20px_rgb(0_0_0/0.8)] backdrop-blur-xl md:hidden">
+        {MENU.map(({ href, label, icon: Icon }) => {
+          const aktif = pathname === href;
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-[10px] transition-all duration-300 ease-fluid active:scale-[0.97] ${
+                aktif
+                  ? "bg-brand/10 font-semibold text-mint"
+                  : "font-medium text-hush"
+              }`}
+            >
+              <Icon size={18} weight={aktif ? "fill" : "light"} />
+              {label}
+            </Link>
+          );
+        })}
       </nav>
     </>
   );
