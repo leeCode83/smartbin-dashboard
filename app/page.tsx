@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import {
   Broadcast,
-  Lock,
-  LockOpen,
   SpinnerGap,
   Trash,
   WarningCircle,
@@ -81,7 +79,6 @@ export default function Dashboard() {
 
   // 2. LOGIKA KONDISIONAL
   const isBau = gasAdc !== null && gasAdc >= thresholdBau;
-  const isServoBuka = jarakUser !== null && jarakUser <= 5;
   const isFull = kapasitas !== null && kapasitas >= 100;
 
   const kapasitasTone =
@@ -145,41 +142,6 @@ export default function Dashboard() {
             Status Kapasitas & Sensor
           </h1>
           <p className="mt-2 text-sm text-hush">Pantauan real-time dari ESP32 Kopdes</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Status sumber data: ikut state error / loading / bacaan hidup */}
-          <span className="glass inline-flex items-center gap-2.5 rounded-full px-4 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-hush">
-            <span className="relative flex h-1.5 w-1.5">
-              {error ? (
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-400" />
-              ) : !reading ? (
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-300" />
-              ) : (
-                <>
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint opacity-60 motion-reduce:animate-none" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-mint" />
-                </>
-              )}
-            </span>
-            {error ? "Gangguan" : !reading ? "Menunggu" : "Live"}
-          </span>
-
-          {/* STATUS GATE */}
-          <div className="glass flex items-center gap-3 rounded-full px-4 py-2">
-            {isServoBuka ? (
-              <LockOpen size={15} weight="light" className="text-mint" />
-            ) : (
-              <Lock size={15} weight="light" className="text-hush" />
-            )}
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-hush">Gate</span>
-            <span
-              className={`text-sm font-semibold ${
-                jarakUser === null ? "text-hush" : isServoBuka ? "text-mint" : "text-ink"
-              }`}
-            >
-              {jarakUser === null ? "—" : isServoBuka ? "TERBUKA (0°)" : "TERTUTUP (90°)"}
-            </span>
-          </div>
         </div>
       </header>
 
